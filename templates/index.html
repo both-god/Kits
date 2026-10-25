@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OSINT Spider Hub</title>
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --panel: #121217;
+            --primary: #00ffcc;
+            --text: #e0e0e0;
+            --border: #2a2a35;
+        }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+        }
+        .logo-container {
+            width: 150px;
+            height: 150px;
+            margin-top: 20px;
+        }
+        .container {
+            width: 90%;
+            max-width: 800px;
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 30px;
+            margin-top: 20px;
+            box-shadow: 0 0 20px rgba(0, 255, 204, 0.05);
+        }
+        h1 { text-align: center; color: var(--primary); margin-top: 0; letter-spacing: 2px;}
+        .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .tab {
+            padding: 10px 20px; background: #1a1a22; border: 1px solid var(--border);
+            color: var(--text); cursor: pointer; border-radius: 6px; transition: 0.3s;
+        }
+        .tab:hover { border-color: var(--primary); color: var(--primary); }
+        .tab.active { background: var(--primary); color: #000; font-weight: bold; border-color: var(--primary); }
+        
+        .panel { display: none; }
+        .panel.active { display: block; animation: fadeIn 0.4s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(5px); } to { opacity: 1; transform: translateY(0); } }
+
+        input[type="text"], input[type="number"], input[type="file"] {
+            width: 100%; padding: 12px; margin-bottom: 15px;
+            background: #1a1a22; border: 1px solid var(--border); color: var(--text);
+            border-radius: 6px; box-sizing: border-box;
+        }
+        button {
+            width: 100%; padding: 12px; background: var(--primary); color: #000;
+            font-weight: bold; border: none; border-radius: 6px; cursor: pointer;
+            font-size: 16px; transition: 0.3s;
+        }
+        button:hover { background: #00ccaa; }
+        pre {
+            background: #000; padding: 15px; border-radius: 6px; color: var(--primary);
+            overflow-x: auto; white-space: pre-wrap; border: 1px solid #333;
+            max-height: 300px;
+        }
+    </style>
+</head>
+<body>
+    <div class="logo-container">
+        <img src="/static/logo.svg" alt="Logo">
+    </div>
+
+    <div class="container">
+        <h1>OSINT SPIDER HUB</h1>
+        
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('email')">Email OSINT</div>
+            <div class="tab" onclick="switchTab('picture')">Picture OSINT</div>
+            <div class="tab" onclick="switchTab('phone')">SMS / Phone</div>
+            <div class="tab" onclick="switchTab('call')">Spam Calling</div>
+        </div>
+
+        <!-- Email Panel -->
+        <div id="panel-email" class="panel active">
+            <input type="text" id="emailInput" placeholder="Enter email (e.g. target@gmail.com)">
+            <button onclick="runEmail()">Search Email</button>
+            <pre id="emailOutput">Awaiting input...</pre>
+        </div>
+
+        <!-- Picture Panel -->
+        <div id="panel-picture" class="panel">
+            <input type="file" id="picInput">
+            <button onclick="runPicture()">Extract EXIF / Reverse Search</button>
+            <pre id="picOutput">Awaiting upload...</pre>
+        </div>
+
+        <!-- Phone Panel -->
+        <div id="panel-phone" class="panel">
+            <input type="text" id="phoneInput" placeholder="Enter phone (e.g. +85512345678)">
+            <button onclick="runPhone()">Lookup Phone Carrier</button>
+            <pre id="phoneOutput">Awaiting input...</pre>
+        </div>
+
+        <!-- Spam Call Panel -->
+        <div id="panel-call" class="panel">
+            <p style="color: #ffaa00; font-size: 14px;">Requires Twilio Credentials for VoIP.</p>
+            <input type="text" id="twilioSid" placeholder="Twilio Account SID">
+            <input type="text" id="twilioToken" placeholder="Twilio Auth Token">
+            <input type="text" id="twilioFrom" placeholder="Twilio From Number (e.g. +1234567890)">
+            <input type="text" id="callTarget" placeholder="Target Phone Number (e.g. +855... )">
+            <input type="number" id="callCount" placeholder="Number of Calls" value="5">
+            <button onclick="runCall()" style="background:#ff4444; color:#fff;">Execute Spam Caller</button>
+            <pre id="callOutput">Awaiting setup...</pre>
+        </div>
+    </div>
+
+    <script>
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            event.target.classList.add('active');
+            document.getElementById(`panel-${tabId}`).classList.add('active');
+        }
+
+        async function runEmail() {
+            const email = document.getElementById('emailInput').value;
+            const out = document.getElementById('emailOutput');
+            out.innerText = "Scanning SMTP & MX Records...";
+            
+            const formData = new FormData();
+            formData.append('email', email);
+
+            try {
+                const res = await fetch('/api/email', { method: 'POST', body: formData });
+                const data = await res.json();
+                out.innerText = JSON.stringify(data, null, 2);
+            } catch(e) { out.innerText = "Error: " + e; }
+        }
+
+        async function runPicture() {
+            const file = document.getElementById('picInput').files[0];
+            if(!file) return alert("Select a picture first!");
+            const out = document.getElementById('picOutput');
+            out.innerText = "Extracting EXIF data...";
+            
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/picture', { method: 'POST', body: formData });
+                const data = await res.json();
+                out.innerText = JSON.stringify(data, null, 2);
+            } catch(e) { out.innerText = "Error: " + e; }
+        }
+
+        async function runPhone() {
+            const phone = document.getElementById('phoneInput').value;
+            const out = document.getElementById('phoneOutput');
+            out.innerText = "Fetching carrier and region...";
+            
+            const formData = new FormData();
+            formData.append('phone', phone);
+
+            try {
+                const res = await fetch('/api/phone', { method: 'POST', body: formData });
+                const data = await res.json();
+                out.innerText = JSON.stringify(data, null, 2);
+            } catch(e) { out.innerText = "Error: " + e; }
+        }
+
+        async function runCall() {
+            const out = document.getElementById('callOutput');
+            out.innerText = "Triggering API...";
+            
+            const payload = {
+                sid: document.getElementById('twilioSid').value,
+                token: document.getElementById('twilioToken').value,
+                from_number: document.getElementById('twilioFrom').value,
+                phone: document.getElementById('callTarget').value,
+                count: parseInt(document.getElementById('callCount').value)
+            };
+
+            try {
+                const res = await fetch('/api/spamcall', { 
+                    method: 'POST', 
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify(payload) 
+                });
+                const data = await res.json();
+                out.innerText = JSON.stringify(data, null, 2);
+            } catch(e) { out.innerText = "Error: " + e; }
+        }
+    </script>
+</body>
+</html>
